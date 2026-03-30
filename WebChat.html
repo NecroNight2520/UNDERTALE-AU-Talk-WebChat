@@ -1,110 +1,35 @@
 <!DOCTYPE html>
-<html lang="ja">
+<html>
 <head>
-<meta charset="UTF-8">
-<title>WebChat</title>
-<style>
-  body {
-    font-family: sans-serif;
-    background: #111;
-    color: #fff;
-    padding: 10px;
-  }
-
-  #chatBox {
-    height: 300px;
-    overflow-y: auto;
-    border: 1px solid #555;
-    padding: 5px;
-    margin-bottom: 10px;
-    background: #000;
-  }
-
-  .msg {
-    margin: 5px 0;
-  }
-
-  .name {
-    font-weight: bold;
-    color: #00ffcc;
-  }
-
-  input {
-    padding: 5px;
-    margin: 2px;
-  }
-
-  #nameInput { width: 25%; }
-  #msgInput { width: 55%; }
-
-  button {
-    width: 15%;
-    background: #00ffcc;
-    border: none;
-    padding: 5px;
-    cursor: pointer;
-  }
-</style>
+  <title>Chat</title>
 </head>
 <body>
+  <h2>チャット</h2>
+  <input id="msg" placeholder="メッセージ">
+  <button onclick="send()">送信</button>
+  <ul id="chat"></ul>
 
-<h2>💬 Web Chat</h2>
+  <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-database.js"></script>
 
-<div id="chatBox"></div>
+  <script>
+    const firebaseConfig = {
+      databaseURL: "https://undertale-au-talk-web-default-rtdb.firebaseio.com/"
+    };
 
-<input id="nameInput" placeholder="名前">
-<input id="msgInput" placeholder="メッセージ">
-<button onclick="sendMessage()">送信</button>
+    firebase.initializeApp(firebaseConfig);
+    const db = firebase.database();
 
-<!-- Firebase -->
-<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
-<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js"></script>
+    function send() {
+      const msg = document.getElementById("msg").value;
+      db.ref("chat").push(msg);
+    }
 
-<script>
-const firebaseConfig = {
-  apiKey: "ここに貼る",
-  authDomain: "ここに貼る",
-  databaseURL: "ここに貼る",
-  projectId: "ここに貼る",
-  storageBucket: "ここに貼る",
-  messagingSenderId: "ここに貼る",
-  appId: "ここに貼る"
-};
-
-firebase.initializeApp(firebaseConfig);
-const db = firebase.database();
-
-const chatBox = document.getElementById("chatBox");
-const nameInput = document.getElementById("nameInput");
-const msgInput = document.getElementById("msgInput");
-
-// 送信
-function sendMessage() {
-  const name = nameInput.value || "名無し";
-  const text = msgInput.value.trim();
-  if (!text) return;
-
-  db.ref("messages").push({
-    name: name,
-    text: text,
-    time: Date.now()
-  });
-
-  msgInput.value = "";
-}
-
-// 受信（リアルタイム）
-db.ref("messages").on("child_added", snapshot => {
-  const msg = snapshot.val();
-
-  const div = document.createElement("div");
-  div.className = "msg";
-  div.innerHTML = `<span class="name">${msg.name}:</span> ${msg.text}`;
-
-  chatBox.appendChild(div);
-  chatBox.scrollTop = chatBox.scrollHeight;
-});
-</script>
-
+    db.ref("chat").on("child_added", snapshot => {
+      const li = document.createElement("li");
+      li.textContent = snapshot.val();
+      document.getElementById("chat").appendChild(li);
+    });
+  </script>
 </body>
-  </html>
+</html>

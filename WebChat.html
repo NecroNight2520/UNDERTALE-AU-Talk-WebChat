@@ -46,17 +46,21 @@ function send() {
       name: name,
       message: msg
     });
+
+    // 🔥 送信後にメッセージ欄リセット
+    document.getElementById("msg").value = "";
   }
 }
 
 db.ref("chat").on("child_added", snapshot => {
   const data = snapshot.val();
 
-  // 🔥 これ追加
-  if (!data.name || !data.message) return;
+  // 🔥 これが超重要
+  if (!data || !data.name || !data.message) return;
 
   const li = document.createElement("li");
   li.textContent = data.name + "： " + data.message;
+
   document.getElementById("chat").appendChild(li);
 });
 </script>

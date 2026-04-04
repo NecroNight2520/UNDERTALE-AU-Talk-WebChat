@@ -36,10 +36,7 @@
       li.textContent = snapshot.val();
       document.getElementById("chat").appendChild(li);
     });
-  </script>
-</body>
-</html>
-<input id="name" placeholder="名前">
+  <script>
 function send() {
   const name = document.getElementById("name").value;
   const msg = document.getElementById("msg").value;
@@ -51,11 +48,15 @@ function send() {
     });
   }
 }
+
 db.ref("chat").on("child_added", snapshot => {
   const data = snapshot.val();
 
+  // 🔥 これ追加
+  if (!data.name || !data.message) return;
+
   const li = document.createElement("li");
   li.textContent = data.name + "： " + data.message;
-
   document.getElementById("chat").appendChild(li);
 });
+</script>

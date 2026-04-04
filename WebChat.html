@@ -1,4 +1,4 @@
-<<!DOCTYPE html>
+<!DOCTYPE html>
 <html>
 <head>
   <title>Chat</title>
@@ -29,43 +29,71 @@
 </head>
 <body>
 
-  <h2>チャット</h2>    <!-- 名前入力 -->  <input id="name" placeholder="名前"><br>
+  <h2>チャット</h2>
 
-  <!-- メッセージ -->    <input id="msg" placeholder="メッセージ">  
-  <button onclick="send()">送信</button>    <ul id="chat"></ul>    <!-- Firebase -->    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-database.js"></script>    <script>  
-    const firebaseConfig = {  
-      apiKey: "test",  
-      authDomain: "test",  
-      databaseURL: "https://undertale-au-talk-web-default-rtdb.firebaseio.com/",  
-      projectId: "undertale-au-talk-web"  
-    };  
-  
-    firebase.initializeApp(firebaseConfig);  
-    const db = firebase.database();  
-  
-    function send() {  
-      const name = document.getElementById("name").value;  
-      const msg = document.getElementById("msg").value;  
-  
-      if (name !== "" && msg !== "") {  
-        db.ref("chat").push({  
-          name: name,  
-          message: msg  
-        });  
-  
-        document.getElementById("msg").value = "";  
-      }  
-    }  
-  
-    db.ref("chat").on("child_added", snapshot => {  
-      const data = snapshot.val();  
-  
-      if (!data || !data.name || !data.message) return;  
-  
-      const li = document.createElement("li");  
-      li.textContent = data.name + "： " + data.message;  
-  
-      document.getElementById("chat").appendChild(li);  
-    });  
-  </script>  </body>  
-</html>  
+  <input id="name" placeholder="名前"><br>
+  <input id="msg" placeholder="メッセージ">
+  <button onclick="send()">送信</button>
+
+  <ul id="chat"></ul>
+
+  <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-database.js"></script>
+
+  <script>
+    const firebaseConfig = {
+      apiKey: "test",
+      authDomain: "test",
+      databaseURL: "https://undertale-au-talk-web-default-rtdb.firebaseio.com/",
+      projectId: "undertale-au-talk-web"
+    };
+
+    firebase.initializeApp(firebaseConfig);
+    const db = firebase.database();
+
+    const MAX_USERS = 10;
+    const ADMIN_NAME = "NecroNight"; // ←自分の名前
+
+    async function send() {
+      const name = document.getElementById("name").value;
+      const msg = document.getElementById("msg").value;
+
+      if (name === "" || msg === "") return;
+
+      // 🔥 現在のユーザー数取得
+      const snapshot = await db.ref("users").once("value");
+      const users = snapshot.val() || {};
+      const userCount = Object.keys(users).length;
+
+      // 🔥 制限チェック（管理者は無視）
+      if (name !== ADMIN_NAME && userCount >= MAX_USERS && !users[name]) {
+        alert("満員です（10人まで）");
+        return;
+      }
+
+      // 🔥 ユーザー登録
+      db.ref("users/" + name).set(true);
+
+      // 🔥 メッセージ送信
+      db.ref("chat").push({
+        name: name,
+        message: msg
+      });
+
+      document.getElementById("msg").value = "";
+    }
+
+    db.ref("chat").on("child_added", snapshot => {
+      const data = snapshot.val();
+
+      if (!data || !data.name || !data.message) return;
+
+      const li = document.createElement("li");
+      li.textContent = data.name + "： " + data.message;
+
+      document.getElementById("chat").appendChild(li);
+    });
+  </script>
+
+</body>
+</html>

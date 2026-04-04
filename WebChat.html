@@ -52,6 +52,7 @@
     const db = firebase.database();
 
     const MAX_USERS = 10;
+    const MAX_MESSAGES = 20;
     const ADMIN_NAME = "NecroNight"; // ←自分の名前
 
     async function send() {
@@ -78,23 +79,43 @@
       db.ref("chat").push({
         name: name,
         message: msg
+      }).then(() => {
+        // 送信後に古いメッセージを削除
+        db.ref("chat").once("value", snapshot => {
+          const messages = snapshot.val() || {};
+          const keys = Object.keys(messages);
+
+          if (keys.length > MAX_MESSAGES) {
+            const excess = keys.length - MAX_MESSAGES;
+            for (let i = 0; i < excess; i++) {
+              db.ref("chat/" + keys[i]).remove();
+            }
+          }
+        });
       });
 
       document.getElementById("msg").value = "";
     }
 
+    // 🔹 新しいメッセージを画面に追加
     db.ref("chat").on("child_added", snapshot => {
       const data = snapshot.val();
-
       if (!data || !data.name || !data.message) return;
 
       const li = document.createElement("li");
+      li.id = snapshot.key; // ← keyをIDとして保持
       li.textContent = data.name + "： " + data.message;
 
       document.getElementById("chat").appendChild(li);
     });
+
+    // 🔹 削除されたメッセージも画面から消す
+    db.ref("chat").on("child_removed", snapshot => {
+      const li = document.getElementById(snapshot.key);
+      if (li) li.remove();
+    });
+
   </script>
 
 </body>
 </html>
-

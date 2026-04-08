@@ -2,13 +2,36 @@
 <html>
 <head>
   <title>Chat</title>
+
+  <style>
+    body {
+      background-color: black;
+      color: white;
+      font-family: sans-serif;
+    }
+
+    input, button {
+      background-color: #222;
+      color: white;
+      border: 1px solid #555;
+    }
+
+    ul {
+      list-style: none;
+      padding: 0;
+    }
+
+    li {
+      margin: 5px 0;
+    }
+  </style>
 </head>
 <body>
 
 <h2>チャット</h2>
 
-<input id="name" placeholder="名前"><br>
-<input id="msg" placeholder="メッセージ">
+<input id="name" placeholder="名前（20文字まで）"><br>
+<input id="msg" placeholder="メッセージ（300文字まで）">
 <button onclick="send()">送信</button>
 
 <ul id="chat"></ul>
@@ -31,27 +54,38 @@ const MAX_MESSAGES = 20;
 
 // 🔹 メッセージ送信
 async function send() {
-  const name = document.getElementById("name").value;
-  const msg = document.getElementById("msg").value;
+  let name = document.getElementById("name").value.trim();
+  let msg = document.getElementById("msg").value.trim();
 
-  if (name !== "" && msg !== "") {
-    await db.ref("chat").push({
-      name: name,
-      message: msg
-    });
+  // 🔥 文字数制限チェック
+  if (name.length === 0 || msg.length === 0) return;
 
-    document.getElementById("msg").value = "";
+  if (name.length > 20) {
+    alert("名前は20文字まで！");
+    return;
+  }
 
-    // 🔥 古いメッセージ削除（20件制限）
-    const snapshot = await db.ref("chat").once("value");
-    const messages = snapshot.val() || {};
-    const keys = Object.keys(messages);
+  if (msg.length > 300) {
+    alert("メッセージは300文字まで！");
+    return;
+  }
 
-    if (keys.length > MAX_MESSAGES) {
-      const excess = keys.length - MAX_MESSAGES;
-      for (let i = 0; i < excess; i++) {
-        await db.ref("chat/" + keys[i]).remove();
-      }
+  await db.ref("chat").push({
+    name: name,
+    message: msg
+  });
+
+  document.getElementById("msg").value = "";
+
+  // 🔥 古いメッセージ削除（20件制限）
+  const snapshot = await db.ref("chat").once("value");
+  const messages = snapshot.val() || {};
+  const keys = Object.keys(messages);
+
+  if (keys.length > MAX_MESSAGES) {
+    const excess = keys.length - MAX_MESSAGES;
+    for (let i = 0; i < excess; i++) {
+      await db.ref("chat/" + keys[i]).remove();
     }
   }
 }
@@ -63,7 +97,10 @@ db.ref("chat").on("child_added", snapshot => {
 
   const li = document.createElement("li");
   li.id = snapshot.key;
+
+  // 🔥 HTMLタグ対策（XSS防止）
   li.textContent = data.name + "： " + data.message;
+
   document.getElementById("chat").appendChild(li);
 });
 

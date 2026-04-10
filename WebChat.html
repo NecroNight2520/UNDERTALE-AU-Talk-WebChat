@@ -1,17 +1,3 @@
-<button onclick="resetAll()">全部リセット</button>
-
-<script>
-async function resetAll() {
-  if (!confirm("本当に全部消す？")) return;
-
-  await db.ref("chat").remove();
-  await db.ref("users").remove();
-
-  alert("全部削除した！");
-  location.reload();
-}
-</script>
-
 <!DOCTYPE html>
 <html>
 <head>

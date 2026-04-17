@@ -26,9 +26,12 @@
     }
   </style>
 </head>
+
 <body>
 
 <h2>チャット</h2>
+
+<p id="count">出席数：0</p>
 
 <input id="name" placeholder="名前（20文字まで）"><br>
 <input id="pass" placeholder="管理者パスワード（任意）"><br>
@@ -64,7 +67,7 @@ if (!userId) {
   localStorage.setItem("userId", userId);
 }
 
-// 入室
+// 入室処理
 window.onload = async () => {
   const savedName = localStorage.getItem("username");
   if (savedName) {
@@ -87,8 +90,18 @@ window.onload = async () => {
   await db.ref("users/" + userId).set(true);
   db.ref("users/" + userId).onDisconnect().remove();
 
-  document.getElementById("status").textContent =
-    isAdmin ? "🔥 管理者として入室中" : "入室中（現在人数：" + (count + 1) + "人）";
+  db.ref("users").on("value", snapshot => {
+    const users = snapshot.val() || {};
+    const activeUsers = Object.keys(users).length;
+
+    const pass = document.getElementById("pass").value;
+    const isAdmin = pass === ADMIN_PASSWORD;
+
+    document.getElementById("status").textContent =
+      isAdmin
+        ? "🔥 管理者として入室中"
+        : "入室中（現在人数：" + activeUsers + "人）";
+  });
 };
 
 // 送信
@@ -121,8 +134,8 @@ async function send() {
 
   document.getElementById("msg").value = "";
 
-  // 20件制限
-  const snapshot = await db.ref("chat").once("value");
+  // 20件制限（安定版：古い順削除）
+  const snapshot = await db.ref("chat").orderByChild("time").once("value");
   const messages = snapshot.val() || {};
   const keys = Object.keys(messages);
 
@@ -151,6 +164,14 @@ db.ref("chat").on("child_added", snapshot => {
 db.ref("chat").on("child_removed", snapshot => {
   const li = document.getElementById(snapshot.key);
   if (li) li.remove();
+});
+
+// 出席数
+db.ref("users").on("value", snapshot => {
+  const users = snapshot.val() || {};
+  const count = Object.keys(users).length;
+
+  document.getElementById("count").textContent = "出席数：" + count;
 });
 </script>
 

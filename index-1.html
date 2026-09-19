@@ -1,0 +1,217 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Chat</title>
+<style>
+body{background:#000;color:#fff;font-family:sans-serif;margin:0;padding:10px}
+input,button,textarea{background:#222;color:#fff;border:1px solid #555;font:inherit;padding:6px}
+textarea{width:100%;box-sizing:border-box;height:110px}
+ul{list-style:none;padding:0}
+li{margin:6px 0;display:flex;align-items:center;gap:8px}
+.av{width:32px;height:32px;border-radius:50%;object-fit:cover;background:#444;flex:none}
+.big{width:96px;height:96px;border-radius:12px;object-fit:cover;background:#444;display:block;margin:8px 0}
+.nm{color:#8cf;cursor:pointer}
+#top{display:flex;justify-content:space-between;align-items:center}
+#menuBtn{font-size:22px;padding:2px 10px}
+#ov{position:fixed;inset:0;background:#0008;display:none;z-index:9}
+#side{position:fixed;top:0;right:0;bottom:0;width:65%;max-width:280px;background:#111;border-left:1px solid #555;transform:translateX(100%);transition:transform .25s;z-index:10;padding:16px}
+#side.open{transform:none}
+#side div{padding:14px 4px;border-bottom:1px solid #333;cursor:pointer}
+.bio{white-space:pre-wrap;word-break:break-word}
+small{color:#999}
+</style>
+</head>
+<body>
+
+<div id="top"><h2 style="margin:0">チャット</h2><button id="menuBtn">▤</button></div>
+<div id="ov"></div>
+<div id="side">
+  <div data-v="terms">利用規約</div>
+  <div data-v="profile">プロフィール</div>
+  <div data-v="chat">チャット</div>
+</div>
+
+<p id="count">出席数:0</p>
+<p id="status"></p>
+
+<!-- 利用規約 -->
+<section id="v-terms" hidden>
+  <h3>利用規約</h3>
+  <div class="bio" id="terms">(利用規約を書く)</div>
+</section>
+
+<!-- 自分のプロフィール(編集) -->
+<section id="v-profile" hidden>
+  <h3>プロフィール</h3>
+  <img id="pIcon" class="big">
+  <input type="file" id="iconFile" accept="image/*"><br>
+  <small>アイコンは縦と横が同じ比率の画像のみ</small>
+  <p>名前<br><input id="pName" maxlength="20" placeholder="名前(20文字まで)"></p>
+  <p>自己紹介 <small id="bioCnt">0/400</small><br><textarea id="pBio" maxlength="400" placeholder="自由に書いてね(400字以内)"></textarea></p>
+  <p>管理者パスワード(任意)<br><input id="pass" type="password"></p>
+  <button id="saveBtn">保存</button> <small id="saveMsg"></small>
+</section>
+
+<!-- 他のユーザーのプロフィール(閲覧のみ) -->
+<section id="v-user" hidden>
+  <img id="uIcon" class="big">
+  <h3 id="uName"></h3>
+  <div class="bio" id="uBio"></div>
+  <p><button onclick="show('chat')">戻る</button></p>
+</section>
+
+<!-- チャット -->
+<section id="v-chat">
+  <input id="msg" placeholder="メッセージ(300文字まで)" style="width:70%">
+  <button id="sendBtn">送信</button>
+  <ul id="chat"></ul>
+</section>
+
+<script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
+<script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-database.js"></script>
+<script>
+const firebaseConfig = {
+  apiKey: "test",
+  authDomain: "test",
+  databaseURL: "https://undertale-au-talk-web-default-rtdb.firebaseio.com/",
+  projectId: "undertale-au-talk-web"
+};
+firebase.initializeApp(firebaseConfig);
+const db = firebase.database();
+
+const MAX_MESSAGES = 20, MAX_USERS = 10;
+const ADMIN_PASSWORD = "ここに新しいパスワードを入れる";
+const DEF_ICON = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 1 1'%3E%3Crect width='1' height='1' fill='%23555'/%3E%3C/svg%3E";
+const $ = id => document.getElementById(id);
+const sid = u => String(u).replace(/[^\w-]/g, "");
+
+let userId = localStorage.getItem("userId");
+if (!userId) { userId = "user_" + Math.random().toString(36).substr(2, 9); localStorage.setItem("userId", userId); }
+
+const profiles = {};
+let pendingIcon = null;
+
+/* ---------- メニュー ---------- */
+function closeMenu(){ $("side").classList.remove("open"); $("ov").style.display = "none"; }
+$("menuBtn").onclick = () => { $("side").classList.add("open"); $("ov").style.display = "block"; };
+$("ov").onclick = closeMenu;
+function show(v){
+  ["terms","profile","chat","user"].forEach(x => $("v-"+x).hidden = x !== v);
+  closeMenu();
+}
+document.querySelectorAll("#side div").forEach(d => d.onclick = () => show(d.dataset.v));
+
+/* ---------- プロフィール ---------- */
+const iconOf = u => { const p = profiles[u]; return p && typeof p.icon === "string" && p.icon.startsWith("data:image/") ? p.icon : DEF_ICON; };
+const nameOf = (u, fb) => (profiles[u] && profiles[u].name) || fb || "名無し";
+function refresh(u){
+  const s = sid(u);
+  document.querySelectorAll('[data-av="'+s+'"]').forEach(e => e.src = iconOf(u));
+  document.querySelectorAll('[data-nm="'+s+'"]').forEach(e => e.textContent = nameOf(u, e.dataset.fb));
+}
+db.ref("profiles").on("child_added", s => { profiles[s.key] = s.val(); refresh(s.key); });
+db.ref("profiles").on("child_changed", s => { profiles[s.key] = s.val(); refresh(s.key); });
+
+function fillMine(){
+  const p = profiles[userId] || {};
+  $("pName").value = p.name || localStorage.getItem("username") || "";
+  $("pBio").value = p.bio || "";
+  $("bioCnt").textContent = $("pBio").value.length + "/400";
+  $("pIcon").src = iconOf(userId);
+}
+db.ref("profiles/" + userId).once("value").then(s => { profiles[userId] = s.val() || {}; fillMine(); });
+$("pBio").oninput = () => $("bioCnt").textContent = $("pBio").value.length + "/400";
+
+$("iconFile").onchange = e => {
+  const f = e.target.files[0]; if (!f) return;
+  const img = new Image(), url = URL.createObjectURL(f);
+  img.onload = () => {
+    URL.revokeObjectURL(url);
+    if (img.naturalWidth !== img.naturalHeight) { alert("縦と横が同じ比率の画像だけ使えるよ"); e.target.value = ""; return; }
+    const c = document.createElement("canvas"); c.width = c.height = 96;
+    c.getContext("2d").drawImage(img, 0, 0, 96, 96);
+    pendingIcon = c.toDataURL("image/jpeg", 0.8);
+    $("pIcon").src = pendingIcon;
+  };
+  img.onerror = () => alert("画像を読み込めなかった");
+  img.src = url;
+};
+
+$("saveBtn").onclick = async () => {
+  const name = $("pName").value.trim(), bio = $("pBio").value.trim();
+  if (!name) { alert("名前を入力してね"); return; }
+  if (name.length > 20) { alert("名前は20文字まで!"); return; }
+  if (bio.length > 400) { alert("自己紹介は400字まで!"); return; }
+  const icon = pendingIcon || (profiles[userId] && profiles[userId].icon) || "";
+  try {
+    await db.ref("profiles/" + userId).set({ name, bio, icon });
+    localStorage.setItem("username", name);
+    pendingIcon = null;
+    $("saveMsg").textContent = "保存したよ";
+    setTimeout(() => $("saveMsg").textContent = "", 2000);
+  } catch (e) { $("saveMsg").textContent = "保存に失敗"; }
+};
+
+function openUser(u){
+  if (u === userId) { show("profile"); return; }
+  const p = profiles[u] || {};
+  $("uIcon").src = iconOf(u);
+  $("uName").textContent = nameOf(u);
+  $("uBio").textContent = p.bio || "";
+  show("user");
+}
+
+/* ---------- 入室・出席数 ---------- */
+window.onload = async () => {
+  const users = (await db.ref("users").once("value")).val() || {};
+  const isAdmin = $("pass").value === ADMIN_PASSWORD;
+  if (!users[userId] && Object.keys(users).length >= MAX_USERS && !isAdmin) {
+    $("status").textContent = "満員です(10人まで)";
+    $("sendBtn").disabled = true;
+    return;
+  }
+  await db.ref("users/" + userId).set(true);
+  db.ref("users/" + userId).onDisconnect().remove();
+};
+db.ref("users").on("value", s => {
+  const n = Object.keys(s.val() || {}).length;
+  $("count").textContent = "出席数:" + n;
+  if (!$("sendBtn").disabled) $("status").textContent = "入室中(現在人数:" + n + "人)";
+});
+
+/* ---------- チャット ---------- */
+async function send(){
+  const msg = $("msg").value.trim();
+  const name = nameOf(userId, "");
+  if (!profiles[userId] || !profiles[userId].name) { alert("先にプロフィールで名前を設定してね"); show("profile"); return; }
+  if (!msg) return;
+  if (msg.length > 300) { alert("メッセージは300文字まで!"); return; }
+  const admin = $("pass").value === ADMIN_PASSWORD;
+  await db.ref("chat").push({ uid: userId, name, message: msg, admin, time: Date.now() });
+  $("msg").value = "";
+
+  const keys = Object.keys((await db.ref("chat").orderByChild("time").once("value")).val() || {});
+  for (let i = 0; i < keys.length - MAX_MESSAGES; i++) await db.ref("chat/" + keys[i]).remove();
+}
+$("sendBtn").onclick = send;
+$("msg").onkeydown = e => { if (e.key === "Enter" && !e.isComposing) send(); };
+
+db.ref("chat").on("child_added", s => {
+  const d = s.val();
+  if (!d || !d.name || !d.message) return;
+  const u = d.uid || "";
+  const li = document.createElement("li"); li.id = s.key;
+  const img = document.createElement("img"); img.className = "av"; img.src = iconOf(u); img.dataset.av = sid(u);
+  img.onclick = () => u && openUser(u);
+  const nm = document.createElement("span"); nm.className = "nm"; nm.dataset.nm = sid(u); nm.dataset.fb = d.name;
+  nm.textContent = nameOf(u, d.name); nm.onclick = () => u && openUser(u);
+  const tx = document.createElement("span"); tx.textContent = ": " + d.message;
+  li.append(img, document.createTextNode(d.admin ? "👑" : ""), nm, tx);
+  $("chat").appendChild(li);
+});
+db.ref("chat").on("child_removed", s => { const li = $(s.key); if (li) li.remove(); });
+</script>
+</body>
+</html>
